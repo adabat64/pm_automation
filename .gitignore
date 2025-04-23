@@ -50,12 +50,30 @@ logs/
 __pycache__/
 .pytest_cache/
 
-# Secure data
+# Data directories
 secure_data/
 real_data/
+processed_data/
+raw_data/
 
 # Sample data
 sample_data/
+
+# Sensitive data files
+*Lucrin*.xlsx
+*Lucrin*.csv
+*_Project_Data.xlsx
+*_Timesheets.csv
+
+# Processed data files
+*processed*.json
+*processed*.csv
+*summary*.json
+*timesheet*.json
+*timesheet*.csv
+*profile*.json
+*workstream*.json
+*budget*.json
 
 # OS
 .DS_Store
