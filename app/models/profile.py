@@ -24,15 +24,15 @@ class Profile(BaseModel):
         schema_extra = {
             "example": {
                 "id": "P001",
-                "name": "John Doe",
-                "role": "Senior Developer",
+                "name": "User_1",
+                "role": "Role_1",
                 "workstreams": ["WS001", "WS002"],
                 "hourly_rate": 150.0,
                 "allocated_hours": {
                     "WS001": 80.0,
                     "WS002": 40.0
                 },
-                "skills": ["Python", "FastAPI", "Project Management"],
+                "skills": ["Skill_1", "Skill_2", "Skill_3"],
                 "start_date": "2024-01-01T00:00:00",
                 "end_date": "2024-12-31T00:00:00",
                 "utilization_target": 0.8

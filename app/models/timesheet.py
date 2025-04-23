@@ -32,7 +32,7 @@ class TimesheetEntry(BaseModel):
                 "user_id": "P001",
                 "workstream_id": "WS001",
                 "hours": 8.0,
-                "notes": "Implemented API endpoints for user management",
+                "notes": "[REDACTED]",
                 "approval_status": "approved",
                 "submitted_at": "2024-01-15T17:00:00",
                 "approved_at": "2024-01-16T09:00:00",

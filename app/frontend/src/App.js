@@ -9,6 +9,9 @@ import ClientDashboard from './components/dashboards/ClientDashboard';
 import PMDashboard from './components/dashboards/PMDashboard';
 import ForecastDashboard from './components/dashboards/ForecastDashboard';
 
+// Setup Components
+import SetupPage from './components/setup/SetupPage';
+
 // Layout Components
 import Navbar from './components/layout/Navbar';
 import Sidebar from './components/layout/Sidebar';
@@ -41,15 +44,14 @@ function App() {
             sx={{
               flexGrow: 1,
               p: 3,
-              width: { sm: `calc(100% - 240px)` },
-              ml: { sm: '240px' },
-              mt: '64px',
+              mt: '64px'
             }}
           >
             <Routes>
               <Route path="/" element={<ClientDashboard />} />
               <Route path="/pm" element={<PMDashboard />} />
               <Route path="/forecast" element={<ForecastDashboard />} />
+              <Route path="/setup" element={<SetupPage />} />
             </Routes>
           </Box>
         </Box>

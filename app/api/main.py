@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Depends, UploadFile, File
+from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Form, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
@@ -8,12 +8,16 @@ import json
 from datetime import datetime
 import pandas as pd
 import tempfile
+import shutil
 
 from app.core.mcp import get_mcp, MCPContext
 from app.models.profile import Profile
 from app.models.workstream import Workstream, WorkstreamStatus
 from app.models.timesheet import TimesheetEntry, TimesheetSummary
 from app.models.budget import BudgetEntry, BudgetForecast, BudgetSummary, BudgetType, BudgetPeriod, BudgetStatus
+from app.utils.process_timesheets import parse_openair_timesheet
+from app.utils.data_privacy import SecureStorage
+from app.utils.data_processor import DataProcessor
 
 app = FastAPI(
     title="Project Management Dashboard API",
@@ -35,6 +39,39 @@ frontend_path = Path(__file__).parent.parent / "frontend" / "build"
 if frontend_path.exists():
     app.mount("/", StaticFiles(directory=str(frontend_path), html=True), name="frontend")
 
+# Settings router
+settings_router = APIRouter()
+REAL_DATA_DIR = "real_data"
+SETTINGS_FILE = os.path.join(REAL_DATA_DIR, "project_settings.json")
+
+@settings_router.post("/settings")
+async def save_settings(client_name: str, currency: str):
+    try:
+        os.makedirs(REAL_DATA_DIR, exist_ok=True)
+        settings = {
+            "client_name": client_name,
+            "currency": currency
+        }
+        with open(SETTINGS_FILE, "w") as f:
+            json.dump(settings, f)
+        return {"message": "Settings saved successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@settings_router.get("/settings")
+async def get_settings():
+    try:
+        if not os.path.exists(SETTINGS_FILE):
+            return {"client_name": "", "currency": "USD"}
+        with open(SETTINGS_FILE, "r") as f:
+            settings = json.load(f)
+        return settings
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Include routers
+app.include_router(settings_router, prefix="/api", tags=["settings"])
+
 # API Routes
 
 @app.get("/api/health")
@@ -48,6 +85,20 @@ async def get_context(mcp: MCPContext = Depends(get_mcp)):
     return mcp.to_dict()
 
 # Profile endpoints
+@app.get("/api/profiles")
+async def get_all_profiles(mcp: MCPContext = Depends(get_mcp)):
+    """Get all profiles."""
+    try:
+        # Load profiles from the real_data directory
+        profiles_file = Path("real_data") / "profiles.json"
+        if profiles_file.exists():
+            with open(profiles_file, 'r') as f:
+                profiles = json.load(f)
+            return profiles
+        return []
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching profiles: {str(e)}")
+
 @app.post("/api/profiles/")
 async def create_profile(profile: Profile, mcp: MCPContext = Depends(get_mcp)):
     """Create a new profile."""
@@ -64,6 +115,20 @@ async def get_profile(profile_id: str, mcp: MCPContext = Depends(get_mcp)):
     return profile_data
 
 # Workstream endpoints
+@app.get("/api/workstreams")
+async def get_all_workstreams(mcp: MCPContext = Depends(get_mcp)):
+    """Get all workstreams."""
+    try:
+        # Load workstreams from the real_data directory
+        workstreams_file = Path("real_data") / "workstreams.json"
+        if workstreams_file.exists():
+            with open(workstreams_file, 'r') as f:
+                workstreams = json.load(f)
+            return workstreams
+        return []
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching workstreams: {str(e)}")
+
 @app.post("/api/workstreams/")
 async def create_workstream(workstream: Workstream, mcp: MCPContext = Depends(get_mcp)):
     """Create a new workstream."""
@@ -202,58 +267,93 @@ async def get_budget_summary(workstream_id: str, mcp: MCPContext = Depends(get_m
 @app.get("/api/dashboard/client/summary")
 async def get_client_summary(mcp: MCPContext = Depends(get_mcp)):
     """Get client-facing dashboard summary."""
-    # This will be expanded to include all client dashboard data
+    data_store = mcp.data_store
+    anonymized_data = data_store.get_anonymized_data()
+    
+    # Calculate budget summary
+    total_budget = sum(budget.get('budget_hours', 0) * budget.get('hourly_rate', 0) 
+                      for budget in anonymized_data['budgets'])
+    spent_budget = sum(timesheet.get('hours', 0) * 
+                      next((b.get('hourly_rate', 0) for b in anonymized_data['budgets'] 
+                           if b.get('id') == timesheet.get('workstream_id')), 0)
+                      for timesheet in anonymized_data['timesheets'])
+    
     return {
         "project_name": "Project Dashboard",
         "status": "In Progress",
         "budget": {
-            "total": 100000,
-            "spent": 45000,
-            "remaining": 55000,
-            "percentage": 45
+            "total": total_budget,
+            "spent": spent_budget,
+            "remaining": total_budget - spent_budget,
+            "percentage": (spent_budget / total_budget * 100) if total_budget > 0 else 0
         },
         "workstreams": [
-            {"id": "WS001", "name": "Project Planning", "status": "active", "progress": 75},
-            {"id": "WS002", "name": "Development", "status": "active", "progress": 30},
-            {"id": "WS003", "name": "Testing", "status": "planned", "progress": 0}
+            {
+                "id": ws.get('anonymized_id'),
+                "name": ws.get('name'),
+                "status": ws.get('status', 'active'),
+                "progress": (sum(t.get('hours', 0) for t in anonymized_data['timesheets'] 
+                               if t.get('workstream_id') == ws.get('id')) / 
+                           ws.get('estimated_hours', 1) * 100) if ws.get('estimated_hours', 0) > 0 else 0
+            }
+            for ws in anonymized_data['workstreams']
         ],
         "health": {
-            "budget": "On Track",
+            "budget": "On Track" if spent_budget <= total_budget else "At Risk",
             "timeline": "On Track",
-            "resources": "At Risk",
+            "resources": "At Risk" if any(p.get('utilization_target', 1) > 0.9 
+                                       for p in anonymized_data['profiles']) else "On Track",
             "scope": "Stable"
         },
-        "blockers": [
-            {"id": "B001", "description": "Resource constraint in Development team", "severity": "Medium"}
-        ],
-        "next_milestones": [
-            {"id": "M001", "name": "Phase 1 Completion", "date": "2024-06-15", "status": "On Track"}
-        ]
+        "blockers": [],  # This should be populated from a separate table in the database
+        "next_milestones": []  # This should be populated from a separate table in the database
     }
 
 @app.get("/api/dashboard/pm/project")
 async def get_pm_project_data(mcp: MCPContext = Depends(get_mcp)):
     """Get project manager dashboard data."""
-    # This will be expanded to include all PM dashboard data
+    data_store = mcp.data_store
+    anonymized_data = data_store.get_anonymized_data()
+    
+    # Calculate timesheet summary
+    timesheet_summary = {
+        "last_updated": max(t.get('date') for t in anonymized_data['timesheets']) 
+                       if anonymized_data['timesheets'] else None,
+        "total_hours": sum(t.get('hours', 0) for t in anonymized_data['timesheets']),
+        "by_workstream": {}
+    }
+    
+    for ws in anonymized_data['workstreams']:
+        ws_id = ws.get('id')
+        timesheet_summary['by_workstream'][ws.get('anonymized_id')] = sum(
+            t.get('hours', 0) for t in anonymized_data['timesheets'] 
+            if t.get('workstream_id') == ws_id
+        )
+    
     return {
         "profiles": [
-            {"id": "P001", "name": "User_1", "role": "Developer", "availability": 80},
-            {"id": "P002", "name": "User_2", "role": "Designer", "availability": 90}
+            {
+                "id": p.get('anonymized_id'),
+                "name": p.get('name'),
+                "role": p.get('role'),
+                "availability": 100 - (sum(t.get('hours', 0) for t in anonymized_data['timesheets'] 
+                                        if t.get('user_id') == p.get('id')) / 
+                                    (p.get('utilization_target', 1) * 40) * 100)  # Assuming 40-hour work week
+            }
+            for p in anonymized_data['profiles']
         ],
         "workstreams": [
-            {"id": "WS001", "name": "Project Planning", "status": "active", "progress": 75},
-            {"id": "WS002", "name": "Development", "status": "active", "progress": 30},
-            {"id": "WS003", "name": "Testing", "status": "planned", "progress": 0}
-        ],
-        "timesheets": {
-            "last_updated": "2024-04-15",
-            "total_hours": 450,
-            "by_workstream": {
-                "WS001": 150,
-                "WS002": 250,
-                "WS003": 50
+            {
+                "id": ws.get('anonymized_id'),
+                "name": ws.get('name'),
+                "status": ws.get('status', 'active'),
+                "progress": (sum(t.get('hours', 0) for t in anonymized_data['timesheets'] 
+                               if t.get('workstream_id') == ws.get('id')) / 
+                           ws.get('estimated_hours', 1) * 100) if ws.get('estimated_hours', 0) > 0 else 0
             }
-        }
+            for ws in anonymized_data['workstreams']
+        ],
+        "timesheets": timesheet_summary
     }
 
 @app.get("/api/dashboard/forecast")
@@ -315,6 +415,83 @@ async def process_query(
         "context": mcp.get_context(focus_areas),
         "response": "LLM query processing to be implemented"
     }
+
+# Setup endpoints
+@app.post("/api/upload")
+async def upload_files(
+    timesheet: Optional[UploadFile] = File(None),
+    project_data: Optional[UploadFile] = File(None)
+):
+    """Upload and process setup files (timesheet and project data)."""
+    if not timesheet and not project_data:
+        raise HTTPException(status_code=400, detail="At least one file must be uploaded")
+        
+    try:
+        results = {}
+        os.makedirs(REAL_DATA_DIR, exist_ok=True)
+        
+        # Process project data if provided
+        if project_data:
+            if not project_data.filename.endswith('.csv'):
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Invalid file type for project data: {project_data.filename}. Must be a CSV file."
+                )
+            
+            # Save project data to file
+            project_data_path = os.path.join(REAL_DATA_DIR, "project_data.csv")
+            with open(project_data_path, "wb") as buffer:
+                shutil.copyfileobj(project_data.file, buffer)
+            
+            # Process the data using DataProcessor
+            processor = DataProcessor(REAL_DATA_DIR)
+            results['project_data'] = processor.process_project_data(project_data_path)
+        
+        # Process timesheet if provided
+        if timesheet:
+            if not timesheet.filename.endswith('.csv'):
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Invalid file type for timesheet: {timesheet.filename}. Must be a CSV file."
+                )
+            
+            # Save timesheet to file
+            timesheet_path = os.path.join(REAL_DATA_DIR, "timesheet.csv")
+            with open(timesheet_path, "wb") as buffer:
+                shutil.copyfileobj(timesheet.file, buffer)
+            
+            # Process the timesheet using DataProcessor
+            processor = DataProcessor(REAL_DATA_DIR)
+            results['timesheet'] = processor.process_timesheet(timesheet_path)
+        
+        return {
+            "message": "Files processed successfully",
+            "results": results
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unexpected error processing files: {str(e)}"
+        )
+
+@app.post("/api/process")
+async def process_data():
+    try:
+        processor = DataProcessor(REAL_DATA_DIR)
+        csv_path = os.path.join(REAL_DATA_DIR, "project_data.csv")
+        
+        if not os.path.exists(csv_path):
+            raise HTTPException(status_code=400, detail="No data file found. Please upload data first.")
+        
+        result = processor.process_project_data(csv_path)
+        return {"message": "Data processed successfully", "result": result}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn
