@@ -49,6 +49,9 @@ logs/
 .cache/
 __pycache__/
 .pytest_cache/
+cache/
+*.cache
+.cache/
 
 # Data directories
 secure_data/
@@ -64,6 +67,8 @@ sample_data/
 *Lucrin*.csv
 *_Project_Data.xlsx
 *_Timesheets.csv
+*project_data.xlsx
+*timesheets.csv
 
 # Processed data files
 *processed*.json
