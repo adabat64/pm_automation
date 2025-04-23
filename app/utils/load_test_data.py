@@ -14,8 +14,8 @@ def load_test_data(
     Load test data into the system.
     
     Args:
-        timesheet_path: Path to timesheet CSV file (e.g., 'Lucrin_Timesheets.csv')
-        project_data_path: Path to project data Excel file (e.g., 'Lucrin_Project_Data.xlsx')
+        timesheet_path: Path to timesheet CSV file (e.g., 'timesheets.csv')
+        project_data_path: Path to project data Excel file (e.g., 'project_data.xlsx')
         use_sample_data: If True, use sample data instead of real data
     """
     mcp = get_mcp()
