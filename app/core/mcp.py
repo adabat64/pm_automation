@@ -134,4 +134,8 @@ class MCPContext:
         data = json.loads(json_str)
         instance = cls(data["metadata"]["project_name"])
         instance.load_from_dict(data)
-        return instance 
+        return instance
+
+def get_mcp() -> MCPContext:
+    """Create and return an MCPContext instance."""
+    return MCPContext(project_name="Project Management Dashboard") 
