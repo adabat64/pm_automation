@@ -123,21 +123,20 @@ function DataUpload({ onUploadComplete }) {
       });
       
       if (response.data.message) {
-        // Process the data after successful upload
-        await fetch('/api/process', { method: 'POST' });
-        showMessage('Files uploaded and processed successfully', 'success');
-      }
-      
-      setTimesheetFile(null);
-      setProjectDataFile(null);
-      
-      // Reset file inputs
-      document.getElementById('timesheet-upload').value = '';
-      document.getElementById('project-data-upload').value = '';
-      
-      // Call the callback to notify parent component
-      if (onUploadComplete) {
-        onUploadComplete();
+        // Files uploaded successfully, notify parent component
+        showMessage('Files uploaded successfully', 'success');
+        
+        setTimesheetFile(null);
+        setProjectDataFile(null);
+        
+        // Reset file inputs
+        document.getElementById('timesheet-upload').value = '';
+        document.getElementById('project-data-upload').value = '';
+        
+        // Call the callback to notify parent component
+        if (onUploadComplete) {
+          onUploadComplete();
+        }
       }
       
     } catch (error) {

@@ -56,14 +56,6 @@ function SetupPage() {
     setActiveTab(newValue);
   };
 
-  const handleNext = () => {
-    setActiveStep((prevStep) => prevStep + 1);
-  };
-
-  const handleBack = () => {
-    setActiveStep((prevStep) => prevStep - 1);
-  };
-
   const handleUploadComplete = () => {
     setUploadComplete(true);
     setActiveStep(1); // Move to the Review step
@@ -178,24 +170,6 @@ function SetupPage() {
           )}
         </TabPanel>
       </Paper>
-
-      <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-        <Button
-          disabled={activeStep === 0}
-          onClick={handleBack}
-        >
-          Back
-        </Button>
-        {activeStep === 0 && (
-          <Button
-            variant="contained"
-            onClick={handleNext}
-            disabled={!uploadComplete}
-          >
-            Next
-          </Button>
-        )}
-      </Box>
 
       <Snackbar
         open={openSnackbar}

@@ -69,8 +69,23 @@ async def get_settings():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# Setup router
+setup_router = APIRouter()
+
+@setup_router.post("/process")
+async def process_setup():
+    """Process the uploaded data files."""
+    try:
+        data_processor = DataProcessor()
+        # Process project data
+        data_processor.process_project_data(os.path.join(REAL_DATA_DIR, "project_data.csv"))
+        return {"message": "Data processed successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 # Include routers
 app.include_router(settings_router, prefix="/api", tags=["settings"])
+app.include_router(setup_router, prefix="/api/setup", tags=["setup"])
 
 # API Routes
 
@@ -278,6 +293,28 @@ async def get_client_summary(mcp: MCPContext = Depends(get_mcp)):
                            if b.get('id') == timesheet.get('workstream_id')), 0)
                       for timesheet in anonymized_data['timesheets'])
     
+    # Prepare per-workstream budget and spent data
+    budgets = anonymized_data['budgets']
+    timesheets = anonymized_data['timesheets']
+    budget_map = {b.get('id'): b for b in budgets}
+    workstreams_list = []
+    for ws in anonymized_data['workstreams']:
+        ws_id = ws.get('id')
+        b_entry = budget_map.get(ws_id, {})
+        ws_budget = b_entry.get('budget_hours', 0) * b_entry.get('hourly_rate', 0)
+        ws_spent = sum(ts.get('hours', 0) * budget_map.get(ts.get('workstream_id'), {}).get('hourly_rate', 0)
+                       for ts in timesheets if ts.get('workstream_id') == ws_id)
+        ws_progress = (sum(ts.get('hours', 0) for ts in timesheets if ts.get('workstream_id') == ws_id) / 
+                       ws.get('estimated_hours', 1) * 100) if ws.get('estimated_hours', 0) > 0 else 0
+        workstreams_list.append({
+            "id": ws.get('anonymized_id'),
+            "name": ws.get('name'),
+            "status": ws.get('status', 'active'),
+            "progress": ws_progress,
+            "budget": ws_budget,
+            "spent": ws_spent
+        })
+    
     return {
         "project_name": "Project Dashboard",
         "status": "In Progress",
@@ -287,17 +324,7 @@ async def get_client_summary(mcp: MCPContext = Depends(get_mcp)):
             "remaining": total_budget - spent_budget,
             "percentage": (spent_budget / total_budget * 100) if total_budget > 0 else 0
         },
-        "workstreams": [
-            {
-                "id": ws.get('anonymized_id'),
-                "name": ws.get('name'),
-                "status": ws.get('status', 'active'),
-                "progress": (sum(t.get('hours', 0) for t in anonymized_data['timesheets'] 
-                               if t.get('workstream_id') == ws.get('id')) / 
-                           ws.get('estimated_hours', 1) * 100) if ws.get('estimated_hours', 0) > 0 else 0
-            }
-            for ws in anonymized_data['workstreams']
-        ],
+        "workstreams": workstreams_list,
         "health": {
             "budget": "On Track" if spent_budget <= total_budget else "At Risk",
             "timeline": "On Track",

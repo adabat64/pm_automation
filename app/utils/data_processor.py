@@ -98,12 +98,12 @@ class DataProcessor:
                 
             # Try reading CSV with different separators
             try:
-                # First try with semicolon separator
-                df = pd.read_csv(csv_path, sep=';', thousands=',')
+                # First try with semicolon separator and proper French decimal handling
+                df = pd.read_csv(csv_path, sep=';', decimal=',', thousands=None)
             except:
                 try:
-                    # Then try with comma separator
-                    df = pd.read_csv(csv_path, sep=',', thousands=',')
+                    # Then try with comma separator and proper French decimal handling
+                    df = pd.read_csv(csv_path, sep=',', decimal=',', thousands=None)
                 except:
                     raise ValueError("Could not read CSV file with either semicolon or comma separator")
             
@@ -118,14 +118,12 @@ class DataProcessor:
             workstream_map = {}  # Map workstream names to their IDs
             
             for workstream_name in workstream_columns:
-                # Clean workstream name - take first part if comma-separated
-                clean_name = workstream_name.split(',')[0].strip()
                 workstream_id = str(uuid.uuid4())
                 workstream = {
                     "id": workstream_id,
-                    "name": clean_name,
-                    "description": "",  # Empty description as requested
-                    "status": "active"  # lowercase to match frontend
+                    "name": workstream_name.strip(),  # Keep full name
+                    "description": f"Workstream for {workstream_name.strip()}",
+                    "status": "active"
                 }
                 workstreams.append(workstream)
                 workstream_map[workstream_name] = workstream_id
@@ -159,8 +157,12 @@ class DataProcessor:
                     if pd.isna(days):
                         days = 0
                     else:
-                        # Convert to float, handling both string and numeric inputs
-                        days = float(str(days).replace(',', '.'))
+                        try:
+                            # Handle French decimal format and ensure proper float conversion
+                            days = float(str(days).strip().replace(',', '.'))
+                        except ValueError:
+                            print(f"Warning: Could not convert '{days}' to float for {profile['name']} in {workstream_name}")
+                            days = 0
                     
                     if days > 0:
                         # Add allocation to profile using the workstream ID from the map
