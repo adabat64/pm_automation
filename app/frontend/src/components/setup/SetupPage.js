@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   Box, 
   Typography, 
@@ -44,6 +45,7 @@ function a11yProps(index) {
 }
 
 function SetupPage() {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState(0);
   const [activeStep, setActiveStep] = useState(0);
   const [uploadComplete, setUploadComplete] = useState(false);
@@ -78,19 +80,25 @@ function SetupPage() {
 
       const result = await response.json();
       setMessage({
-        text: 'Data processed successfully! You can now proceed to create visualizations.',
+        text: 'Data processed successfully! Redirecting to dashboard...',
         severity: 'success'
       });
       setProcessComplete(true);
+      setOpenSnackbar(true);
+      
+      // Wait a short moment to show the success message, then redirect
+      setTimeout(() => {
+        navigate('/');  // Redirect to root (main dashboard)
+      }, 1500);  // 1.5 second delay to show the success message
     } catch (error) {
       console.error('Error processing data:', error);
       setMessage({
         text: 'Failed to process data. Please try again.',
         severity: 'error'
       });
+      setOpenSnackbar(true);
     } finally {
       setProcessing(false);
-      setOpenSnackbar(true);
     }
   };
 
