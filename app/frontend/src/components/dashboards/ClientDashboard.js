@@ -1,14 +1,29 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Typography, Grid, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, CircularProgress, Alert } from '@mui/material';
+import { 
+  Box, 
+  Typography, 
+  Grid, 
+  Paper, 
+  Table, 
+  TableBody, 
+  TableCell, 
+  TableContainer, 
+  TableHead, 
+  TableRow, 
+  CircularProgress, 
+  Alert,
+  LinearProgress,
+  Chip
+} from '@mui/material';
 
 function ClientDashboard() {
-  const [workstreamBudgets, setWorkstreamBudgets] = useState([]);
+  const [summary, setSummary] = useState(null);
   const [settings, setSettings] = useState({ client_name: 'Client', currency: 'USD' });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    Promise.all([fetchWorkstreamBudgets(), fetchSettings()]);
+    Promise.all([fetchSummary(), fetchSettings()]);
   }, []);
 
   const fetchSettings = async () => {
@@ -38,61 +53,21 @@ function ClientDashboard() {
     return symbols[currency] || currency;
   };
 
-  const fetchWorkstreamBudgets = async () => {
+  const fetchSummary = async () => {
     try {
       setLoading(true);
-      const [profilesRes, workstreamsRes] = await Promise.all([
-        fetch('/api/profiles'),
-        fetch('/api/workstreams')
-      ]);
-
-      if (!profilesRes.ok || !workstreamsRes.ok) {
-        throw new Error('Failed to fetch data');
+      const response = await fetch('/api/dashboard/client/summary');
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch summary data');
       }
 
-      const [profiles, workstreams] = await Promise.all([
-        profilesRes.json(),
-        workstreamsRes.json()
-      ]);
-
-      console.log('Fetched profiles:', profiles);
-      console.log('Fetched workstreams:', workstreams);
-
-      // Calculate budgets for each workstream
-      const budgets = workstreams.map(workstream => {
-        const workstreamAllocations = profiles.flatMap(profile => 
-          profile.workstreams
-            .filter(ws => ws.workstream_id === workstream.id)
-            .map(ws => ({
-              ...ws,
-              daily_rate: profile.daily_rate
-            }))
-        );
-
-        console.log(`Calculating budget for workstream ${workstream.name}:`, workstreamAllocations);
-
-        const totalBudget = workstreamAllocations.reduce((sum, allocation) => {
-          const budget = allocation.days_allocated * allocation.daily_rate;
-          console.log(`  Allocation: ${allocation.days_allocated} days * ${allocation.daily_rate} rate = ${budget}`);
-          return sum + budget;
-        }, 0);
-
-        console.log(`Total budget for ${workstream.name}: ${totalBudget}`);
-
-        return {
-          id: workstream.id,
-          name: workstream.name,
-          totalBudget,
-          status: workstream.status
-        };
-      });
-
-      console.log('Calculated budgets:', budgets);
-      setWorkstreamBudgets(budgets);
+      const data = await response.json();
+      setSummary(data);
       setError(null);
     } catch (err) {
-      console.error('Error fetching workstream budgets:', err);
-      setError('Failed to load workstream budgets');
+      console.error('Error fetching summary:', err);
+      setError('Failed to load project summary');
     } finally {
       setLoading(false);
     }
@@ -117,33 +92,179 @@ function ClientDashboard() {
   return (
     <Box sx={{ flexGrow: 1, p: 3 }}>
       <Typography variant="h4" gutterBottom>
-        {settings.client_name} Dashboard
+        Project Summary
       </Typography>
       
       <Grid container spacing={3}>
+        {/* Project Status and Budget Overview */}
+        <Grid item xs={12} md={6}>
+          <Paper sx={{ p: 3, height: '100%' }}>
+            <Typography variant="h6" gutterBottom>Project Status</Typography>
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="subtitle1" color="text.secondary">Status</Typography>
+              <Chip 
+                label={summary?.status || 'Not Set'} 
+                color={summary?.status === 'In Progress' ? 'primary' : 'default'}
+                sx={{ mt: 1 }}
+              />
+            </Box>
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="subtitle1" color="text.secondary">Budget Overview</Typography>
+              <Box sx={{ mt: 1 }}>
+                <Typography variant="body1">
+                  Total Budget: {getCurrencySymbol(settings.currency)}
+                  {summary?.budget?.total?.toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                  })}
+                </Typography>
+                <Typography variant="body1">
+                  Spent: {getCurrencySymbol(settings.currency)}
+                  {summary?.budget?.spent?.toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                  })}
+                </Typography>
+                <Typography variant="body1">
+                  Remaining: {getCurrencySymbol(settings.currency)}
+                  {summary?.budget?.remaining?.toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                  })}
+                </Typography>
+                <Box sx={{ mt: 1 }}>
+                  <Typography variant="body2" color="text.secondary">Budget Utilization</Typography>
+                  <LinearProgress 
+                    variant="determinate" 
+                    value={summary?.budget?.percentage || 0} 
+                    sx={{ mt: 1, height: 10, borderRadius: 5 }}
+                  />
+                </Box>
+              </Box>
+            </Box>
+          </Paper>
+        </Grid>
+
+        {/* Project Health */}
+        <Grid item xs={12} md={6}>
+          <Paper sx={{ p: 3, height: '100%' }}>
+            <Typography variant="h6" gutterBottom>Project Health</Typography>
+            <Grid container spacing={2}>
+              <Grid item xs={6}>
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="subtitle1" color="text.secondary">Budget</Typography>
+                  <Chip 
+                    label={summary?.health?.budget || 'Not Set'} 
+                    color={summary?.health?.budget === 'On Track' ? 'success' : 'error'}
+                    sx={{ mt: 1 }}
+                  />
+                </Box>
+              </Grid>
+              <Grid item xs={6}>
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="subtitle1" color="text.secondary">Timeline</Typography>
+                  <Chip 
+                    label={summary?.health?.timeline || 'Not Set'} 
+                    color={summary?.health?.timeline === 'On Track' ? 'success' : 'error'}
+                    sx={{ mt: 1 }}
+                  />
+                </Box>
+              </Grid>
+              <Grid item xs={6}>
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="subtitle1" color="text.secondary">Resources</Typography>
+                  <Chip 
+                    label={summary?.health?.resources || 'Not Set'} 
+                    color={summary?.health?.resources === 'On Track' ? 'success' : 'error'}
+                    sx={{ mt: 1 }}
+                  />
+                </Box>
+              </Grid>
+              <Grid item xs={6}>
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="subtitle1" color="text.secondary">Scope</Typography>
+                  <Chip 
+                    label={summary?.health?.scope || 'Not Set'} 
+                    color={summary?.health?.scope === 'Stable' ? 'success' : 'error'}
+                    sx={{ mt: 1 }}
+                  />
+                </Box>
+              </Grid>
+            </Grid>
+          </Paper>
+        </Grid>
+
+        {/* Workstream Progress */}
         <Grid item xs={12}>
-          <Paper sx={{ p: 3, width: '100%' }}>
-            <Typography variant="h6" gutterBottom>Workstream Budgets</Typography>
+          <Paper sx={{ p: 3 }}>
+            <Typography variant="h6" gutterBottom>Workstream Progress</Typography>
             <TableContainer>
               <Table size="medium">
                 <TableHead>
                   <TableRow>
                     <TableCell sx={{ fontSize: '1.1rem', fontWeight: 'bold' }}>Workstream</TableCell>
-                    <TableCell align="right" sx={{ fontSize: '1.1rem', fontWeight: 'bold' }}>Total Budget</TableCell>
                     <TableCell sx={{ fontSize: '1.1rem', fontWeight: 'bold' }}>Status</TableCell>
+                    <TableCell sx={{ fontSize: '1.1rem', fontWeight: 'bold' }}>Progress</TableCell>
+                    <TableCell sx={{ fontSize: '1.1rem', fontWeight: 'bold' }}>Budget Utilization</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {workstreamBudgets.map((workstream) => (
+                  {summary?.workstreams?.map((workstream) => (
                     <TableRow key={workstream.id} hover>
                       <TableCell sx={{ fontSize: '1rem' }}>{workstream.name}</TableCell>
-                      <TableCell align="right" sx={{ fontSize: '1rem' }}>
-                        {getCurrencySymbol(settings.currency)}{workstream.totalBudget.toLocaleString(undefined, {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2
-                        })}
+                      <TableCell sx={{ fontSize: '1rem' }}>
+                        <Chip 
+                          label={workstream.status} 
+                          color={workstream.status === 'active' ? 'primary' : 'default'}
+                          size="small"
+                        />
                       </TableCell>
-                      <TableCell sx={{ fontSize: '1rem' }}>{workstream.status}</TableCell>
+                      <TableCell sx={{ fontSize: '1rem', width: '30%' }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                          <Box sx={{ width: '100%', mr: 1 }}>
+                            <LinearProgress 
+                              variant="determinate" 
+                              value={workstream.progress} 
+                              sx={{ height: 10, borderRadius: 5 }}
+                            />
+                          </Box>
+                          <Box sx={{ minWidth: 35 }}>
+                            <Typography variant="body2" color="text.secondary">
+                              {Math.round(workstream.progress)}%
+                            </Typography>
+                          </Box>
+                        </Box>
+                      </TableCell>
+                      <TableCell sx={{ fontSize: '1rem', width: '40%' }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                          <Typography variant="body2" color="text.secondary">
+                            {getCurrencySymbol(settings.currency)}{workstream.spent?.toLocaleString(undefined, {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2
+                            }) || '0.00'}
+                          </Typography>
+                          <Box sx={{ flexGrow: 1, position: 'relative' }}>
+                            <LinearProgress 
+                              variant="determinate" 
+                              value={(workstream.spent || 0) / workstream.budget * 100} 
+                              sx={{ 
+                                height: 10, 
+                                borderRadius: 5,
+                                backgroundColor: 'rgba(0, 0, 0, 0.1)',
+                                '& .MuiLinearProgress-bar': {
+                                  backgroundColor: (workstream.spent || 0) / workstream.budget > 0.9 ? '#f44336' : '#4caf50'
+                                }
+                              }}
+                            />
+                          </Box>
+                          <Typography variant="body2" color="text.secondary">
+                            {getCurrencySymbol(settings.currency)}{workstream.budget?.toLocaleString(undefined, {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2
+                            }) || '0.00'}
+                          </Typography>
+                        </Box>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

@@ -14,7 +14,6 @@ import SetupPage from './components/setup/SetupPage';
 
 // Layout Components
 import Navbar from './components/layout/Navbar';
-import Sidebar from './components/layout/Sidebar';
 
 // Create a theme instance
 const theme = createTheme({
@@ -36,15 +35,17 @@ function App() {
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <Router>
-        <Box sx={{ display: 'flex' }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
           <Navbar />
-          <Sidebar />
           <Box
             component="main"
             sx={{
               flexGrow: 1,
               p: 3,
-              mt: '64px'
+              mt: '64px',
+              width: '100%',
+              maxWidth: '100%',
+              overflowX: 'hidden'
             }}
           >
             <Routes>

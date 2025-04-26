@@ -97,7 +97,7 @@ function PMDashboard() {
   return (
     <Box sx={{ flexGrow: 1, p: 3 }}>
       <Typography variant="h4" gutterBottom>
-        {settings.client_name || 'Project'} Dashboard
+        PM Dashboard
       </Typography>
 
       <Tabs value={activeTab} onChange={handleTabChange} sx={{ mb: 3 }}>
