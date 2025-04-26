@@ -44,6 +44,9 @@ env/
 # Logs
 *.log
 logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
 # Cache
 .cache/
@@ -53,11 +56,18 @@ cache/
 *.cache
 .cache/
 
+# Node
+node_modules/
+.npm/
+
 # Data directories
 secure_data/
 real_data/
 processed_data/
 raw_data/
+local_data/
+test_data/
+data/
 
 # Sample data
 sample_data/
@@ -69,6 +79,8 @@ sample_data/
 *_Timesheets.csv
 *project_data.xlsx
 *timesheets.csv
+*client_data*.xlsx
+*client_data*.csv
 
 # Processed data files
 *processed*.json
@@ -79,7 +91,12 @@ sample_data/
 *profile*.json
 *workstream*.json
 *budget*.json
+*allocation*.json
+*settings*.json
 
 # OS
 .DS_Store
-Thumbs.db 
+Thumbs.db
+*.tmp
+*.bak
+Desktop.ini
